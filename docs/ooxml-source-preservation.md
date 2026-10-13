@@ -22,11 +22,25 @@ The existing wordcraft_docx::read/write API is intentionally unchanged.
 SourceBackedDocx::open/save must be explicitly used by a caller. That avoids
 changing memory costs, serialization and behavior of existing applications.
 
+## M2 (initial): unchanged top-level body fragments
+
+For body content with the same sequence of direct paragraphs, tables and SDT
+blocks, a token-offset patch now reuses untouched raw XML ranges from the source
+document and replaces only changed blocks. Non-block XML and namespace declarations
+are kept from the source. Generated replacement blocks carry their namespace
+declarations locally, so producer-specific prefixes cannot invalidate them.
+
+The optimization is deliberately disabled if the modeled block sequence changes
+or if the canonical XML outside those blocks changes. It is not a complete
+run-level merge: editing a paragraph can still drop unknown markup inside that
+same paragraph. Tests include source-only extension siblings and untouched
+paragraph preservation across edits.
+
 ## Known limits: do not claim lossless edited DOCX yet
 
-1. XML extensions *inside a modified part* may be discarded. Oasis solves this
-   through source fragments and schema-aware, local element patching. Port that
-   next for paragraphs/runs, then tables/sections and headers/footers.
+1. XML extensions inside *changed individual paragraphs/tables* may still be
+   discarded. Oasis solves this with source fragments and schema-aware merging.
+   Add granular runs and paragraph properties, then tables/sections and stories.
 2. Source relationships whose IDs conflict with generated IDs are skipped
    when the XML owner was rebuilt. Precise relationship-ID remapping requires
    a semantic reference graph and must not be guessed.
@@ -43,8 +57,8 @@ changing memory costs, serialization and behavior of existing applications.
 
 ## Follow-up milestones
 
-- M2: associate source fragments with semantic paragraphs/runs and retain
-  unknown nodes/attributes during local text or formatting edits.
+- M2 continued: source fragments for changed paragraphs/runs and XML-property
+  merge; then tables, sections and related stories.
 - M3: namespace/MC processing and safe OPC relationship path remapping.
 - M4: custom-XML data-binding synchronization, where bindings are supported.
 - M5: corpus of DOCX samples, repeated edited save cycles, Open XML validation

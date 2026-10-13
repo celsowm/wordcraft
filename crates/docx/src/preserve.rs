@@ -71,6 +71,21 @@ impl SourceBackedDocx {
             result.insert(name, rebuilt);
         }
 
+        // Source-fragment M2: preserve unchanged top-level body blocks and
+        // source-only sibling markup after editing another paragraph. The
+        // canonical output still owns any changed block.
+        if let (Some(original), Some(before), Some(after)) = (
+            self.original.get("word/document.xml"),
+            baseline.get("word/document.xml"),
+            result.get("word/document.xml"),
+        ) {
+            if before != after {
+                if let Some(patched) = patch_unchanged_body_blocks(original, before, after) {
+                    result.insert("word/document.xml".into(), patched);
+                }
+            }
+        }
+
         // Source-only binary/XML parts survive edits, including future producer
         // extensions. Do not restore standard parts intentionally removed by the
         // modeled writer, or create case-insensitive OPC name collisions.
@@ -110,6 +125,175 @@ impl SourceBackedDocx {
 
         zip_entries(&result.into_iter().collect::<Vec<_>>())
     }
+}
+
+
+/// Extract direct body blocks using the XML tokenizer, without normalizing or
+/// serializing original XML. The raw ranges retain unknown prefixes and markup.
+#[derive(Clone)]
+struct BodySpan {
+    kind: Vec<u8>,
+    start: usize,
+    end: usize,
+}
+
+fn supported_body_child(local: &[u8]) -> bool {
+    matches!(local, b"p" | b"tbl" | b"sdt")
+}
+
+fn body_spans(bytes: &[u8]) -> Option<Vec<BodySpan>> {
+    use quick_xml::events::Event;
+
+    let mut reader = quick_xml::Reader::from_reader(bytes);
+    let mut depth = 0usize;
+    let mut body = None;
+    let mut found = false;
+    let mut active: Option<(Vec<u8>, usize)> = None;
+    let mut spans = Vec::new();
+
+    loop {
+        let before = reader.buffer_position() as usize;
+        let event = reader.read_event().ok()?;
+        let after = reader.buffer_position() as usize;
+        match event {
+            Event::Start(element) => {
+                depth = depth.checked_add(1)?;
+                let local = element.local_name();
+                if local.as_ref() == b"body" && depth == 2 && body.is_none() {
+                    body = Some(depth);
+                } else if body.is_some_and(|level| depth == level + 1)
+                    && supported_body_child(local.as_ref())
+                {
+                    if active.is_some() {
+                        return None;
+                    }
+                    active = Some((local.as_ref().to_vec(), before));
+                }
+            }
+            Event::Empty(element) => {
+                let local = element.local_name();
+                if body.is_some_and(|level| depth == level)
+                    && supported_body_child(local.as_ref())
+                {
+                    spans.push(BodySpan { kind: local.as_ref().to_vec(), start: before, end: after });
+                }
+            }
+            Event::End(element) => {
+                let local = element.local_name();
+                if body.is_some_and(|level| depth == level + 1)
+                    && supported_body_child(local.as_ref())
+                {
+                    let (kind, start) = active.take()?;
+                    if kind != local.as_ref() {
+                        return None;
+                    }
+                    spans.push(BodySpan { kind, start, end: after });
+                }
+                if body == Some(depth) && local.as_ref() == b"body" {
+                    if active.is_some() {
+                        return None;
+                    }
+                    body = None;
+                    found = true;
+                }
+                depth = depth.checked_sub(1)?;
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    (found && active.is_none()).then_some(spans)
+}
+
+fn body_scaffold(bytes: &[u8], blocks: &[BodySpan]) -> Option<Vec<u8>> {
+    let mut scaffold = Vec::new();
+    let mut cursor = 0usize;
+    for span in blocks {
+        scaffold.extend_from_slice(bytes.get(cursor..span.start)?);
+        cursor = span.end;
+    }
+    scaffold.extend_from_slice(bytes.get(cursor..)?);
+    Some(scaffold)
+}
+
+/// Namespace declarations on the canonical document root, included in each
+/// transplanted block so it remains valid under producer-specific root prefixes.
+fn generated_namespace_attrs(bytes: &[u8]) -> Option<Vec<u8>> {
+    use quick_xml::events::Event;
+
+    let mut reader = quick_xml::Reader::from_reader(bytes);
+    loop {
+        match reader.read_event().ok()? {
+            Event::Start(root) => {
+                let mut attrs = Vec::new();
+                for attr in root.attributes() {
+                    let a = attr.ok()?;
+                    let key = a.key.as_ref();
+                    if key == b"xmlns" || key.starts_with(b"xmlns:") {
+                        attrs.push(b' ');
+                        attrs.extend_from_slice(key);
+                        attrs.extend_from_slice(b"=\"");
+                        attrs.extend_from_slice(a.value.as_ref());
+                        attrs.push(b'"');
+                    }
+                }
+                return (attrs.len() <= 64 * 1024).then_some(attrs);
+            }
+            Event::Eof => return None,
+            _ => {}
+        }
+    }
+}
+
+fn standalone_fragment(fragment: &[u8], xmlns: &[u8]) -> Option<Vec<u8>> {
+    if !fragment.starts_with(b"<") {
+        return None;
+    }
+    let opening_end = fragment.iter().position(|b| *b == b'>')?;
+    let mut result = Vec::with_capacity(fragment.len() + xmlns.len());
+    result.extend_from_slice(fragment.get(..opening_end)?);
+    result.extend_from_slice(xmlns);
+    result.extend_from_slice(fragment.get(opening_end..)?);
+    Some(result)
+}
+
+/// Keep original XML for unchanged blocks and the entire original document
+/// scaffold, while substituting only changed direct top-level body blocks.
+///
+/// If block order/count/type or XML outside those blocks changes, do not guess:
+/// return None and let the existing canonical writer handle the document.
+fn patch_unchanged_body_blocks(original: &[u8], baseline: &[u8], current: &[u8]) -> Option<Vec<u8>> {
+    let source_blocks = body_spans(original)?;
+    let before_blocks = body_spans(baseline)?;
+    let after_blocks = body_spans(current)?;
+    if source_blocks.is_empty()
+        || source_blocks.len() != before_blocks.len()
+        || source_blocks.len() != after_blocks.len()
+        || source_blocks.iter().zip(&before_blocks).any(|(a, b)| a.kind != b.kind)
+        || source_blocks.iter().zip(&after_blocks).any(|(a, b)| a.kind != b.kind)
+    {
+        return None;
+    }
+    if body_scaffold(baseline, &before_blocks)? != body_scaffold(current, &after_blocks)? {
+        // Section, root, drawing metadata or another non-block construct changed.
+        return None;
+    }
+    let namespaces = generated_namespace_attrs(current)?;
+    let mut result = Vec::with_capacity(original.len() + current.len().saturating_sub(baseline.len()));
+    let mut cursor = 0usize;
+    for ((source, before), after) in source_blocks.iter().zip(&before_blocks).zip(&after_blocks) {
+        result.extend_from_slice(original.get(cursor..source.start)?);
+        let baseline_xml = baseline.get(before.start..before.end)?;
+        let updated_xml = current.get(after.start..after.end)?;
+        if baseline_xml == updated_xml {
+            result.extend_from_slice(original.get(source.start..source.end)?);
+        } else {
+            result.extend_from_slice(&standalone_fragment(updated_xml, &namespaces)?);
+        }
+        cursor = source.end;
+    }
+    result.extend_from_slice(original.get(cursor..)?);
+    Some(result)
 }
 
 fn safe_part_name(name: &str) -> bool {

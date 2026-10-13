@@ -98,3 +98,49 @@ fn editing_metadata_does_not_rewrite_the_original_document_xml() {
     assert_eq!(output["word/document.xml"], raw["word/document.xml"]);
     assert_eq!(output["customXml/item99.xml"], raw["customXml/item99.xml"]);
 }
+
+
+#[test]
+fn a_text_edit_preserves_source_only_sibling_xml() {
+    let original = fixture();
+    let mut source = SourceBackedDocx::open(&original).expect("open");
+    let mut paragraph = Paragraph::new();
+    paragraph.insert_text(0, "Changed paragraph", &CharProps::default()).expect("text");
+    source.document.body = vec![para_block(paragraph)];
+    let saved = parts(&source.save().expect("save"));
+    let xml = String::from_utf8(saved["word/document.xml"].clone()).expect("xml");
+    assert!(xml.contains("Changed paragraph"));
+    // This source-only OOXML sibling was not part of the semantic model.
+    assert!(xml.contains("w:unknownExtension w:val=\"keep-me\""));
+}
+
+#[test]
+fn editing_a_second_paragraph_preserves_extensions_in_the_first() {
+    let mut first = Paragraph::new();
+    first.insert_text(0, "First", &CharProps::default()).expect("text");
+    let mut second = Paragraph::new();
+    second.insert_text(0, "Second", &CharProps::default()).expect("text");
+    let mut doc = Document::new();
+    doc.body = vec![para_block(first), para_block(second)];
+
+    let mut source_files = parts(&write(&doc).expect("write"));
+    let body = String::from_utf8(source_files["word/document.xml"].clone()).expect("xml");
+    // Unknown content in an untouched paragraph must survive editing its sibling.
+    let body = body.replacen(
+        "<w:p>",
+        "<w:p><future:private xmlns:future=\"urn:test:future\" value=\"keep\"/>",
+        1,
+    );
+    source_files.insert("word/document.xml".into(), body.into_bytes());
+    let raw = zip_parts(source_files);
+
+    let mut document = SourceBackedDocx::open(&raw).expect("open");
+    let mut updated = Paragraph::new();
+    updated.insert_text(0, "Second edited", &CharProps::default()).expect("text");
+    document.document.body[1] = para_block(updated);
+
+    let output = parts(&document.save().expect("save"));
+    let xml = String::from_utf8(output["word/document.xml"].clone()).expect("xml");
+    assert!(xml.contains("Second edited"));
+    assert!(xml.contains("future:private xmlns:future=\"urn:test:future\" value=\"keep\""));
+}
