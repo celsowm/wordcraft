@@ -239,7 +239,26 @@ pub fn save_bytes_opts(name: &str, doc: &Document, opts: &ExportOptions) -> Resu
 /// [`save_bytes`], encrypted with `password` when there is one and the format is a Word package
 /// (other formats are copies and are written as they are).
 pub fn save_bytes_with(name: &str, doc: &Document, password: Option<&str>, opts: &ExportOptions) -> Result<Vec<u8>, String> {
-    let bytes = save_bytes_opts(name, doc, opts)?;
+    save_bytes_with_source(name, doc, password, opts, None)
+}
+
+/// The same save path, with optional source-backed preservation for imported
+/// transitional DOCX. Other formats keep their established exporters.
+pub fn save_bytes_with_source(
+    name: &str,
+    doc: &Document,
+    password: Option<&str>,
+    opts: &ExportOptions,
+    source: Option<&wordcraft_docx::SourceBackedDocx>,
+) -> Result<Vec<u8>, String> {
+    let bytes = if ext_of(name) == "docx" {
+        match source {
+            Some(source) => source.save_document(doc).map_err(|e| e.to_string())?,
+            None => save_bytes_opts(name, doc, opts)?,
+        }
+    } else {
+        save_bytes_opts(name, doc, opts)?
+    };
     match password {
         Some(pw) if can_encrypt(name) => wordcraft_docx::encrypt(&bytes, pw).map_err(|e| e.to_string()),
         _ => Ok(bytes),
@@ -427,13 +446,38 @@ pub fn save_path(path: &std::path::Path, doc: &Document) -> Result<(), String> {
 /// [`save_path`], encrypted with `password` as [`save_bytes_with`] does.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn save_path_with(path: &std::path::Path, doc: &Document, password: Option<&str>, opts: &ExportOptions) -> Result<(), String> {
+    save_path_with_source(path, doc, password, opts, None)
+}
+
+/// Atomically write a document using source preservation when the caller opted
+/// in on import. The existing safe-save replacement semantics remain intact.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn save_path_with_source(
+    path: &std::path::Path,
+    doc: &Document,
+    password: Option<&str>,
+    opts: &ExportOptions,
+    source: Option<&wordcraft_docx::SourceBackedDocx>,
+) -> Result<(), String> {
     crate::file_access::check_write(&path.to_string_lossy())?;
-    let bytes = save_bytes_with(&path.to_string_lossy(), doc, password, opts)?;
+    let bytes = save_bytes_with_source(&path.to_string_lossy(), doc, password, opts, source)?;
     safe_save::write(path, &bytes).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 #[cfg(target_arch = "wasm32")]
 pub fn save_path_with(path: &std::path::Path, _doc: &Document, _password: Option<&str>, _opts: &ExportOptions) -> Result<(), String> {
+    Err(format!("{}: files are saved through the browser on the web", path.display()))
+}
+
+/// Web builds save through the browser's download callback.
+#[cfg(target_arch = "wasm32")]
+pub fn save_path_with_source(
+    path: &std::path::Path,
+    _doc: &Document,
+    _password: Option<&str>,
+    _opts: &ExportOptions,
+    _source: Option<&wordcraft_docx::SourceBackedDocx>,
+) -> Result<(), String> {
     Err(format!("{}: files are saved through the browser on the web", path.display()))
 }
 

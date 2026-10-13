@@ -44,14 +44,21 @@ impl SourceBackedDocx {
         Ok(Self { document, baseline, original: pkg.into_parts() })
     }
 
-    /// Serialize edits while preserving source-only package parts and unchanged
-    /// XML subdocuments. A changed XML part is still rebuilt canonically.
+    /// Serialize this instance's editable document.
     pub fn save(&self) -> Result<Vec<u8>, DocxError> {
-        if self.document == self.baseline {
+        self.save_document(&self.document)
+    }
+
+    /// Serialize the supplied current document against the original source.
+    ///
+    /// This lets the editor keep its normal Session document/undo model while
+    /// reusing the imported source snapshot for explicit preservation-mode saves.
+    pub fn save_document(&self, document: &Document) -> Result<Vec<u8>, DocxError> {
+        if document == &self.baseline {
             return zip_entries(&self.original.iter().map(|(k, v)| (k.clone(), v.clone())).collect::<Vec<_>>());
         }
         let baseline: BTreeMap<String, Vec<u8>> = write::write_parts(&self.baseline, Flavor::Document)?.into_iter().collect();
-        let current = write::write_parts(&self.document, Flavor::Document)?;
+        let current = write::write_parts(document, Flavor::Document)?;
         let mut result: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         let mut reused = BTreeSet::new();
 

@@ -28,5 +28,7 @@ jobs:
         run: cargo fmt --all -- --check
       - name: DOCX preservation regressions
         run: cargo test -p wordcraft-docx --test preservation --locked
+      - name: Engine integration regressions
+        run: cargo test -p wordcraft-engine --test source_backed_io --locked
       - name: WASM compatibility
         run: cargo check -p wordcraft-docx --target wasm32-unknown-unknown --locked

@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("file.new", "New", "File", new).key("Mod+N").params(r#"{"template"?: "blank|sample|letter|resume|report"}"#).pure(),
         CommandSpec::new("file.open", "Open", "File", open)
             .key("Mod+O / Mod+F12")
-            .params(r#"{"path": string, "data"?: base64 (the file's bytes; `path` then only names it), "password"?: string (for a password-protected Word document)}"#)
+            .params(r#"{"path": string, "data"?: base64 (the file's bytes; `path` then only names it), "password"?: string (for a password-protected Word document), "preserveSource"?: bool (opt-in conservative DOCX source round-trip)}"#)
             .pure(),
         CommandSpec::new("file.save", "Save", "File", save)
             .key("Mod+S / Shift+F12")
@@ -140,11 +140,16 @@ fn open(s: &mut Session, v: &Value) -> CmdResult {
         return sel_result(s);
     };
     let password = p::str(v, "password");
-    let (mut doc, encrypted) = if let Some(data) = p::str(v, "data") {
+    let preserve = p::bool(v, "preserveSource").unwrap_or(false);
+    let (mut doc, encrypted, source) = if let Some(data) = p::str(v, "data") {
         let bytes = super::insert::base64_decode(data).ok_or_else(|| CmdError::Params("bad base64".into()))?;
-        crate::io::open_bytes_with(path, &bytes, password).map_err(CmdError::Failed)?
+        open_with_source(path, &bytes, password, preserve)?
+    } else if preserve {
+        let bytes = crate::io::read_file(path).map_err(CmdError::Failed)?;
+        open_with_source(path, &bytes, password, true)?
     } else {
-        crate::io::open_path_with(std::path::Path::new(path), password).map_err(CmdError::Failed)?
+        let (doc, encrypted) = crate::io::open_path_with(std::path::Path::new(path), password).map_err(CmdError::Failed)?;
+        (doc, encrypted, None)
     };
     // Plain text and Markdown carry no language: they are in the editing language.
     let ext = std::path::Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
@@ -154,12 +159,42 @@ fn open(s: &mut Session, v: &Value) -> CmdResult {
         doc.styles.default_chr.lang = Some(lang.clone());
     }
     s.set_document(doc);
+    s.source_docx = source;
     s.path = Some(path.into());
     // Like Word, a document opened with a password is saved with it again.
     if encrypted {
         s.password = password.map(crate::io::Password::new);
     }
     Ok(json!({"path": path, "paragraphs": s.doc.paragraph_count(), "words": s.doc.word_count(), "encrypted": encrypted}))
+}
+
+/// Bound the extra memory held by a source-backed DOCX on desktop and WASM.
+const MAX_SOURCE_DOCX_BYTES: usize = 16 * 1024 * 1024;
+
+/// Use the regular importer first: preservation must not alter the semantic
+/// contents or the existing password/file-signature dispatch.
+fn open_with_source(
+    path: &str,
+    bytes: &[u8],
+    password: Option<&str>,
+    preserve: bool,
+) -> Result<(Document, bool, Option<Box<wordcraft_docx::SourceBackedDocx>>), CmdError> {
+    let (doc, encrypted) = crate::io::open_bytes_with(path, bytes, password).map_err(CmdError::Failed)?;
+    if !preserve {
+        return Ok((doc, encrypted, None));
+    }
+    if crate::io::ext_of(path) != "docx" || encrypted {
+        return Err(CmdError::Params("source preservation supports only unencrypted .docx files".into()));
+    }
+    if bytes.len() > MAX_SOURCE_DOCX_BYTES {
+        return Err(CmdError::Params(format!(
+            "source preservation is limited to {} MiB DOCX files",
+            MAX_SOURCE_DOCX_BYTES / (1024 * 1024)
+        )));
+    }
+    let source = wordcraft_docx::SourceBackedDocx::open(bytes)
+        .map_err(|e| CmdError::Failed(format!("source preservation unavailable: {e}")))?;
+    Ok((doc, encrypted, Some(Box::new(source))))
 }
 
 /// File › Info › Protect Document › Encrypt with Password: the password Word documents are saved
@@ -201,7 +236,8 @@ fn save(s: &mut Session, v: &Value) -> CmdResult {
     }
     s.stamp_save();
     let password = s.password.as_ref().map(crate::io::Password::as_str);
-    crate::io::save_path_with(&path, &s.doc, password, &export_options(s, v)).map_err(CmdError::Failed)?;
+    crate::io::save_path_with_source(&path, &s.doc, password, &export_options(s, v), s.source_docx.as_deref())
+        .map_err(CmdError::Failed)?;
     let encrypted = password.is_some() && crate::io::can_encrypt(&path.to_string_lossy());
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     if ["docx", "docm", "dotx", "dotm", "odt", "rtf", "json", "xml"].contains(&ext.as_str()) {

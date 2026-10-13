@@ -322,6 +322,9 @@ impl EditSnapshot {
 /// An editing session.
 pub struct Session {
     pub doc: Document,
+    /// Opt-in imported DOCX source snapshot; not part of undo/redo or the document model.
+    /// Cleared whenever the current document is replaced.
+    pub source_docx: Option<Box<wordcraft_docx::SourceBackedDocx>>,
     pub sel: Selection,
     pub view: ViewState,
     /// Formatting picked with a collapsed caret, applied to the next typed text.
@@ -568,6 +571,7 @@ impl Session {
             sel: Selection::caret(start),
             view: ViewState::default(),
             pending: None,
+            source_docx: None,
             path: None,
             user_dict_path: None,
             dirty: false,
@@ -958,6 +962,7 @@ impl Session {
         self.document_id = self.document_id.wrapping_add(1);
         self.bib_style = doc_bib_style(&doc);
         self.doc = doc;
+        self.source_docx = None;
         self.doc.ensure_nonempty();
         self.password = None;
         self.sel = Selection::caret(self.doc.start_of(StoryRef::Body));

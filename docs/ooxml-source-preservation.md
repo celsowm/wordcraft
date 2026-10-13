@@ -18,9 +18,14 @@ first migration milestone of the Oasis Editor preservation strategy.
 - Regression tests cover unchanged source, editing main text and editing only
   metadata with unknown XML, custom data and opaque binary entries.
 
-The existing wordcraft_docx::read/write API is intentionally unchanged.
-SourceBackedDocx::open/save must be explicitly used by a caller. That avoids
-changing memory costs, serialization and behavior of existing applications.
+The existing wordcraft_docx::read/write API is unchanged. The engine now accepts
+`file.open` with `{"path":"example.docx","preserveSource":true}` (with optional
+base64 `data`, including in the browser), and native `file.save`/Save As and
+browser downloads use the retained source automatically. This opt-in mode is
+limited to unencrypted transitional DOCX files at most 16 MiB. Replacing the
+document clears the source snapshot, and non-DOCX exports still use their
+existing writers. The default file-open behavior remains canonical while this
+mode is validated on real-world files.
 
 ## M2 (initial): unchanged top-level body fragments
 
