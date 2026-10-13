@@ -90,3 +90,28 @@ fn default_open_does_not_enable_experimental_mode() {
     s.run("file.open", &json!({"path": input.to_string_lossy()})).expect("open");
     assert!(s.source_docx.is_none());
 }
+
+#[test]
+fn browser_style_base64_open_and_download_preserve_unknown_parts() {
+    let original = fixture();
+    let mut s = Session::new(Document::new());
+    let data = wordcraft_engine::cmd::insert::base64_encode(&original);
+    s.run("file.open", &json!({"path": "uploaded.docx", "data": data, "preserveSource": true})).expect("open uploaded DOCX");
+    assert!(s.source_docx.is_some());
+    s.run("document.setText", &json!({"text": "Edited in WASM"})).expect("edit");
+    let bytes = wordcraft_engine::io::save_bytes_with_source(
+        "uploaded.docx",
+        &s.doc,
+        None,
+        &Default::default(),
+        s.source_docx.as_deref(),
+    )
+    .expect("download bytes");
+    let zipped = entries(&bytes);
+    assert_eq!(
+        zipped.get("customXml/opaque99.xml").map(Vec::as_slice),
+        Some(b"<legal:case xmlns:legal=\"urn:legal\"><legal:id>42</legal:id></legal:case>".as_slice())
+    );
+    let reopened = wordcraft_docx::read(&bytes).expect("reopen");
+    assert!(reopened.plain_text(wordcraft_doc::StoryRef::Body).contains("Edited in WASM"));
+}
