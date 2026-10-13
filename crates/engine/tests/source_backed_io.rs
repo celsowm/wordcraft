@@ -99,14 +99,8 @@ fn browser_style_base64_open_and_download_preserve_unknown_parts() {
     s.run("file.open", &json!({"path": "uploaded.docx", "data": data, "preserveSource": true})).expect("open uploaded DOCX");
     assert!(s.source_docx.is_some());
     s.run("document.setText", &json!({"text": "Edited in WASM"})).expect("edit");
-    let bytes = wordcraft_engine::io::save_bytes_with_source(
-        "uploaded.docx",
-        &s.doc,
-        None,
-        &Default::default(),
-        s.source_docx.as_deref(),
-    )
-    .expect("download bytes");
+    let bytes = wordcraft_engine::io::save_bytes_with_source("uploaded.docx", &s.doc, None, &Default::default(), s.source_docx.as_deref())
+        .expect("download bytes");
     let zipped = entries(&bytes);
     assert_eq!(
         zipped.get("customXml/opaque99.xml").map(Vec::as_slice),
