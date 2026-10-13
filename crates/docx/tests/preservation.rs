@@ -99,7 +99,6 @@ fn editing_metadata_does_not_rewrite_the_original_document_xml() {
     assert_eq!(output["customXml/item99.xml"], raw["customXml/item99.xml"]);
 }
 
-
 #[test]
 fn a_text_edit_preserves_source_only_sibling_xml() {
     let original = fixture();
@@ -126,11 +125,7 @@ fn editing_a_second_paragraph_preserves_extensions_in_the_first() {
     let mut source_files = parts(&write(&doc).expect("write"));
     let body = String::from_utf8(source_files["word/document.xml"].clone()).expect("xml");
     // Unknown content in an untouched paragraph must survive editing its sibling.
-    let body = body.replacen(
-        "<w:p>",
-        "<w:p><future:private xmlns:future=\"urn:test:future\" value=\"keep\"/>",
-        1,
-    );
+    let body = body.replacen("<w:p>", "<w:p><future:private xmlns:future=\"urn:test:future\" value=\"keep\"/>", 1);
     source_files.insert("word/document.xml".into(), body.into_bytes());
     let raw = zip_parts(source_files);
 

@@ -74,11 +74,9 @@ impl SourceBackedDocx {
         // Source-fragment M2: preserve unchanged top-level body blocks and
         // source-only sibling markup after editing another paragraph. The
         // canonical output still owns any changed block.
-        if let (Some(original), Some(before), Some(after)) = (
-            self.original.get("word/document.xml"),
-            baseline.get("word/document.xml"),
-            result.get("word/document.xml"),
-        ) {
+        if let (Some(original), Some(before), Some(after)) =
+            (self.original.get("word/document.xml"), baseline.get("word/document.xml"), result.get("word/document.xml"))
+        {
             if before != after {
                 if let Some(patched) = patch_unchanged_body_blocks(original, before, after) {
                     result.insert("word/document.xml".into(), patched);
@@ -127,7 +125,6 @@ impl SourceBackedDocx {
     }
 }
 
-
 /// Extract direct body blocks using the XML tokenizer, without normalizing or
 /// serializing original XML. The raw ranges retain unknown prefixes and markup.
 #[derive(Clone)]
@@ -172,17 +169,13 @@ fn body_spans(bytes: &[u8]) -> Option<Vec<BodySpan>> {
             }
             Event::Empty(element) => {
                 let local = element.local_name();
-                if body.is_some_and(|level| depth == level)
-                    && supported_body_child(local.as_ref())
-                {
+                if body.is_some_and(|level| depth == level) && supported_body_child(local.as_ref()) {
                     spans.push(BodySpan { kind: local.as_ref().to_vec(), start: before, end: after });
                 }
             }
             Event::End(element) => {
                 let local = element.local_name();
-                if body.is_some_and(|level| depth == level + 1)
-                    && supported_body_child(local.as_ref())
-                {
+                if body.is_some_and(|level| depth == level + 1) && supported_body_child(local.as_ref()) {
                     let (kind, start) = active.take()?;
                     if kind != local.as_ref() {
                         return None;
