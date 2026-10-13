@@ -10,6 +10,12 @@
 <h1 align="center">WordCraft</h1>
 
 <p align="center">
+  <a href="https://celsowm.github.io/wordcraft/?sample"><b>Try the live WebAssembly playground</b></a> ·
+  <a href="https://github.com/celsowm/wordcraft/actions/workflows/deploy-pages.yml">Pages deployment status</a>
+  <br><sub>This fork publishes the browser app automatically after successful builds of `main`.</sub>
+</p>
+
+<p align="center">
   <b>Writing and document design; an open-source, clean-room reimplementation of Microsoft Word, rebuilt in pure Rust.</b>
 </p>
 
