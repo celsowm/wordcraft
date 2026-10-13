@@ -1,0 +1,32 @@
+name: DOCX source preservation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/docx/**"
+      - "crates/doc/**"
+      - "docs/ooxml-source-preservation.md"
+      - ".github/workflows/docx-preservation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: DOCX preservation regressions
+        run: cargo test -p wordcraft-docx --test preservation --locked
+      - name: WASM compatibility
+        run: cargo check -p wordcraft-docx --target wasm32-unknown-unknown --locked

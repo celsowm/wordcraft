@@ -12,6 +12,7 @@ mod crypt;
 mod custom;
 mod flat;
 mod package;
+mod preserve;
 mod read;
 mod smart_art;
 mod units;
@@ -26,6 +27,7 @@ pub use crypt::{
 };
 pub use flat::{XmlKind, sniff_xml, write as write_flat};
 pub use read::read;
+pub use preserve::SourceBackedDocx;
 pub use smart_art::smart_art_items;
 pub use write::{write, write_as};
 

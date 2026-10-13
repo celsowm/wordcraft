@@ -190,6 +190,11 @@ impl Package {
         Package { files }
     }
 
+    /// Consume the bounded package without copying its uncompressed entries.
+    pub(crate) fn into_parts(self) -> BTreeMap<String, Vec<u8>> {
+        self.files
+    }
+
     /// Part bytes by name (leading `/` ignored; case-insensitive fallback).
     pub fn get(&self, name: &str) -> Option<&[u8]> {
         let n = name.trim_start_matches('/');
