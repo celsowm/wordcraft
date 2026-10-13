@@ -3,8 +3,8 @@
 use std::collections::BTreeMap;
 use std::io::{Cursor, Read, Write};
 
-use wordcraft_doc::{Document, Paragraph, para_block};
 use wordcraft_doc::props::CharProps;
+use wordcraft_doc::{Document, Paragraph, para_block};
 use wordcraft_docx::{SourceBackedDocx, write};
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
@@ -35,11 +35,7 @@ fn zip_parts(files: BTreeMap<String, Vec<u8>>) -> Vec<u8> {
 fn fixture() -> Vec<u8> {
     let mut p = parts(&write(&Document::new()).expect("canonical DOCX"));
     let body = String::from_utf8(p["word/document.xml"].clone()).expect("xml");
-    let body = body.replacen(
-        "</w:body>",
-        "<w:unknownExtension w:val=\"keep-me\"/></w:body>",
-        1,
-    );
+    let body = body.replacen("</w:body>", "<w:unknownExtension w:val=\"keep-me\"/></w:body>", 1);
     p.insert("word/document.xml".into(), body.into_bytes());
     p.insert("customXml/item99.xml".into(), b"<case><id>42</id></case>".to_vec());
     p.insert("word/embeddings/opaque99.bin".into(), vec![1, 9, 4, 2]);

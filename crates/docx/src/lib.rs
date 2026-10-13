@@ -26,8 +26,8 @@ pub use crypt::{
     is_encrypted, protection_hash,
 };
 pub use flat::{XmlKind, sniff_xml, write as write_flat};
-pub use read::read;
 pub use preserve::SourceBackedDocx;
+pub use read::read;
 pub use smart_art::smart_art_items;
 pub use write::{write, write_as};
 

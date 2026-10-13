@@ -34,16 +34,10 @@ impl SourceBackedDocx {
     pub fn open(bytes: &[u8]) -> Result<Self, DocxError> {
         let pkg = Package::open(bytes)?;
         let rels = pkg.rels("");
-        let main = rels
-            .by_type(rt::OFFICE_DOC)
-            .filter(|r| !r.external)
-            .map(|r| r.target.as_str())
-            .unwrap_or("word/document.xml");
+        let main = rels.by_type(rt::OFFICE_DOC).filter(|r| !r.external).map(|r| r.target.as_str()).unwrap_or("word/document.xml");
         let types = ContentTypes::read(&pkg);
         if types.of(main) != Some(Flavor::Document.main_content_type()) {
-            return Err(DocxError::NotWord(
-                "source-backed preservation currently requires a transitional .docx".into(),
-            ));
+            return Err(DocxError::NotWord("source-backed preservation currently requires a transitional .docx".into()));
         }
         let document = read::read_opened(&pkg)?;
         let baseline = document.clone();
@@ -54,12 +48,9 @@ impl SourceBackedDocx {
     /// XML subdocuments. A changed XML part is still rebuilt canonically.
     pub fn save(&self) -> Result<Vec<u8>, DocxError> {
         if self.document == self.baseline {
-            return zip_entries(
-                &self.original.iter().map(|(k, v)| (k.clone(), v.clone())).collect::<Vec<_>>(),
-            );
+            return zip_entries(&self.original.iter().map(|(k, v)| (k.clone(), v.clone())).collect::<Vec<_>>());
         }
-        let baseline: BTreeMap<String, Vec<u8>> =
-            write::write_parts(&self.baseline, Flavor::Document)?.into_iter().collect();
+        let baseline: BTreeMap<String, Vec<u8>> = write::write_parts(&self.baseline, Flavor::Document)?.into_iter().collect();
         let current = write::write_parts(&self.document, Flavor::Document)?;
         let mut result: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         let mut reused = BTreeSet::new();
@@ -111,9 +102,7 @@ impl SourceBackedDocx {
             }
         }
         // Source-only .rels were already copied byte-for-byte above.
-        if let (Some(original), Some(rebuilt)) =
-            (self.original.get("[Content_Types].xml"), result.get("[Content_Types].xml"))
-        {
+        if let (Some(original), Some(rebuilt)) = (self.original.get("[Content_Types].xml"), result.get("[Content_Types].xml")) {
             if let Some(merged) = merge_content_types(original, rebuilt) {
                 result.insert("[Content_Types].xml".to_string(), merged);
             }
@@ -180,9 +169,7 @@ fn merge_rels(original: &[u8], rebuilt: &[u8], source_first: bool) -> Option<Vec
     let primary = if source_first { &orig } else { &generated };
     let secondary = if source_first { &generated } else { &orig };
     for rel in primary.iter().chain(secondary) {
-        let (Some(id), Some(kind), Some(target)) =
-            (rel.attr("Id"), rel.attr("Type"), rel.attr("Target"))
-        else {
+        let (Some(id), Some(kind), Some(target)) = (rel.attr("Id"), rel.attr("Type"), rel.attr("Target")) else {
             continue;
         };
         if !ids.insert(id.to_string()) {
