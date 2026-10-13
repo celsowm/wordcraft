@@ -187,13 +187,9 @@ fn open_with_source(
         return Err(CmdError::Params("source preservation supports only unencrypted .docx files".into()));
     }
     if bytes.len() > MAX_SOURCE_DOCX_BYTES {
-        return Err(CmdError::Params(format!(
-            "source preservation is limited to {} MiB DOCX files",
-            MAX_SOURCE_DOCX_BYTES / (1024 * 1024)
-        )));
+        return Err(CmdError::Params(format!("source preservation is limited to {} MiB DOCX files", MAX_SOURCE_DOCX_BYTES / (1024 * 1024))));
     }
-    let source = wordcraft_docx::SourceBackedDocx::open(bytes)
-        .map_err(|e| CmdError::Failed(format!("source preservation unavailable: {e}")))?;
+    let source = wordcraft_docx::SourceBackedDocx::open(bytes).map_err(|e| CmdError::Failed(format!("source preservation unavailable: {e}")))?;
     Ok((doc, encrypted, Some(Box::new(source))))
 }
 
@@ -236,8 +232,7 @@ fn save(s: &mut Session, v: &Value) -> CmdResult {
     }
     s.stamp_save();
     let password = s.password.as_ref().map(crate::io::Password::as_str);
-    crate::io::save_path_with_source(&path, &s.doc, password, &export_options(s, v), s.source_docx.as_deref())
-        .map_err(CmdError::Failed)?;
+    crate::io::save_path_with_source(&path, &s.doc, password, &export_options(s, v), s.source_docx.as_deref()).map_err(CmdError::Failed)?;
     let encrypted = password.is_some() && crate::io::can_encrypt(&path.to_string_lossy());
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     if ["docx", "docm", "dotx", "dotm", "odt", "rtf", "json", "xml"].contains(&ext.as_str()) {

@@ -685,13 +685,7 @@ impl WordApp {
             let password =
                 if matches!(id, "file.save" | "file.saveAs") { self.session.password.as_ref().map(wordcraft_engine::Password::as_str) } else { None };
             let opts = wordcraft_engine::cmd::file::export_options(&self.session, &params);
-            let bytes = wordcraft_engine::io::save_bytes_with_source(
-                &name,
-                &self.session.doc,
-                password,
-                &opts,
-                self.session.source_docx.as_deref(),
-            )?;
+            let bytes = wordcraft_engine::io::save_bytes_with_source(&name, &self.session.doc, password, &opts, self.session.source_docx.as_deref())?;
             if let Some(d) = &self.services.download
                 && let Err(e) = d(&name, &bytes)
             {
