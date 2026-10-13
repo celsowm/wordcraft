@@ -1572,11 +1572,14 @@ impl WordApp {
             } else if img {
                 self.insert_or_change_picture(json!({"data": wordcraft_engine::cmd::insert::base64_encode(&bytes)}))
             } else {
-                self.run("file.open", json!({
-                    "path": name,
-                    "data": wordcraft_engine::cmd::insert::base64_encode(&bytes),
-                    "preserveSource": self.services.preserve_docx_on_open && lower.ends_with(".docx"),
-                }))
+                self.run(
+                    "file.open",
+                    json!({
+                        "path": name,
+                        "data": wordcraft_engine::cmd::insert::base64_encode(&bytes),
+                        "preserveSource": self.services.preserve_docx_on_open && lower.ends_with(".docx"),
+                    }),
+                )
             };
             if r.is_ok() {
                 self.ui.backstage = false;
