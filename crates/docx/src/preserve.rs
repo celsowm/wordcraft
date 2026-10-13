@@ -158,9 +158,7 @@ fn body_spans(bytes: &[u8]) -> Option<Vec<BodySpan>> {
                 let local = element.local_name();
                 if local.as_ref() == b"body" && depth == 2 && body.is_none() {
                     body = Some(depth);
-                } else if body.is_some_and(|level| depth == level + 1)
-                    && supported_body_child(local.as_ref())
-                {
+                } else if body.is_some_and(|level| depth == level + 1) && supported_body_child(local.as_ref()) {
                     if active.is_some() {
                         return None;
                     }
