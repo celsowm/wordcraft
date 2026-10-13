@@ -32,7 +32,7 @@ pub const SAVE_EXTS: &[&str] = &["docx", "docm", "dotx", "dotm", "pdf", "txt", "
 
 /// The extension of a file name or path, lower-case; empty when the file name has none (a dot
 /// in a folder name doesn't count).
-fn ext_of(name: &str) -> String {
+pub(crate) fn ext_of(name: &str) -> String {
     let file = name.rsplit(['/', '\\']).next().unwrap_or(name);
     file.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase()).unwrap_or_default()
 }

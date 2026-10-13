@@ -1060,6 +1060,7 @@ impl Session {
             // Go Back's places, like the caret history: not part of the document.
             edit_marks: _,
             go_back_step: _,
+            source_docx: _,
         } = self;
         let head = if history.len() + SNAPSHOT_HEAD > MAX_UNDO { history.iter().take(SNAPSHOT_HEAD).cloned().collect() } else { Vec::new() };
         EditSnapshot {

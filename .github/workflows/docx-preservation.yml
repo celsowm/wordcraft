@@ -6,6 +6,8 @@ on:
     paths:
       - "crates/docx/**"
       - "crates/doc/**"
+      - "crates/engine/**"
+      - "crates/ui-egui/**"
       - "docs/ooxml-source-preservation.md"
       - ".github/workflows/docx-preservation.yml"
   workflow_dispatch:
