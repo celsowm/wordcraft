@@ -227,6 +227,8 @@ fn services(inbox: Inbox, ctx: egui::Context, dirty: Rc<Cell<bool>>, saves: Rc<P
         download: Some(Box::new(move |path: &str, bytes: &[u8]| download(&saves, &save_ctx, path, bytes))),
         print: Some(Box::new(print_pdf)),
         inbox: Some(inbox),
+        // Opt-in browser experiment; normal opening remains on the stable path.
+        preserve_docx_on_open: query().split(['?', '&']).any(|s| s == "preserveDocx=1"),
         on_dirty: Some(Box::new(move |d| dirty.set(d))),
         animations_enabled: Some(animations_enabled()),
         store_font: Some(Box::new(font_store::store)),

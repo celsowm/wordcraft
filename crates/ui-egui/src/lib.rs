@@ -106,6 +106,9 @@ pub struct Services {
     pub open_async: Option<Box<dyn Fn(&str)>>,
     /// Web: files (name, bytes) delivered asynchronously (picker, drag and drop).
     pub inbox: Option<Inbox>,
+    /// Experimental browser opt-in: preserve the source package when opening
+    /// a supported DOCX through the file picker or drag-and-drop.
+    pub preserve_docx_on_open: bool,
     /// Web: hand bytes to the browser as a download. An error means no download started (the
     /// browser can't tell the page whether the user then kept the file).
     pub download: Option<Box<dyn Fn(&str, &[u8]) -> Result<(), String>>>,
@@ -1569,7 +1572,11 @@ impl WordApp {
             } else if img {
                 self.insert_or_change_picture(json!({"data": wordcraft_engine::cmd::insert::base64_encode(&bytes)}))
             } else {
-                self.run("file.open", json!({"path": name, "data": wordcraft_engine::cmd::insert::base64_encode(&bytes)}))
+                self.run("file.open", json!({
+                    "path": name,
+                    "data": wordcraft_engine::cmd::insert::base64_encode(&bytes),
+                    "preserveSource": self.services.preserve_docx_on_open && lower.ends_with(".docx"),
+                }))
             };
             if r.is_ok() {
                 self.ui.backstage = false;

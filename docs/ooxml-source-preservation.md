@@ -25,7 +25,10 @@ browser downloads use the retained source automatically. This opt-in mode is
 limited to unencrypted transitional DOCX files at most 16 MiB. Replacing the
 document clears the source snapshot, and non-DOCX exports still use their
 existing writers. The default file-open behavior remains canonical while this
-mode is validated on real-world files.
+mode is validated on real-world files. To exercise it through the actual web
+picker/drag-and-drop, visit `https://celsowm.github.io/wordcraft/?preserveDocx=1`.
+The flag applies only to DOCX uploads; other formats keep normal import.
+Saving/downloading the opened DOCX uses the same retained source snapshot.
 
 ## M2 (initial): unchanged top-level body fragments
 
